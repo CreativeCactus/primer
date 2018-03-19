@@ -55,11 +55,6 @@ $(document).ready(function(){
         if(key == 'g') {
             reload()
         }
-        // Clear and redraw
-        if(key == 'c') {
-            clear()
-            redraw()
-        }
         // Diff one step
         if(key == 'q') {
             let last = 0;

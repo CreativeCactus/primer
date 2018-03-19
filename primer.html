@@ -33,7 +33,13 @@
       <canvas id="canvas" tabindex='1'>
          Canvas not supported
       </canvas>
+      <script src="/canvas.js"></script>
 
-    <script src="/main.js"></script>
+      <script>
+        const script = document.createElement('script');
+        script.setAttribute('src', `/main.js?uri=${window.location.href}`);
+        document.head.appendChild(script);
+        // src="/main.js"
+      </script>
 
 </body></html>
