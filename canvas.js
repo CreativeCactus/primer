@@ -21,7 +21,7 @@ function resize(){
 }
 
 function sq(x,y,w,h,color){
-	c.fillStyle=color||color.err;
+	c.fillStyle=color||'#FF5555';
     c.fillRect(x, y, w, h);
 }
 function clear(){

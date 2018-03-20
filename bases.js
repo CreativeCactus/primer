@@ -1,35 +1,23 @@
 
-let markers = {}
 let PRIMES = []
 let ZOOM = 1
 let XOFFSET = 0
 let YOFFSET = 0
 
-let XSIZE = 10;
-let YSIZE = 10;
-
-const BIN_LENGTH = 32
-
-// Bit state ; Marked state
-const color = {
-    '0;0':'#000000',
-    '1;0':'#FFFFFF',
-    '0;1':'#00DD00',
-    '1;1':'#FF22FF',
-    'err':'#FF1111',
-    '?:0':'#777777'
-}
+let BASE = 2
+let BASES = 4
+let CELL = 20
+let SEPARATOR = 4
 
 function renderHUD(e){
     var mousePos = getMousePos(e || lastMouse);
     var cell = {
-        x:(mousePos.x+XOFFSET)/(XSIZE*ZOOM),
-        y:(mousePos.y+YOFFSET)/(YSIZE*ZOOM)
+        x:(mousePos.x+XOFFSET)/(CELL*ZOOM),
+        y:(mousePos.y+YOFFSET)/(CELL*ZOOM)
     }
     var messages = [
         `Mouse: ${mousePos.x},${mousePos.y} `,
-        `Cell: ${cell.x.toFixed(0)},${cell.y.toFixed(0)}: ${bin(~~cell.x,~~cell.y)}`,
-        `Prime: ${PRIMES[~~cell.x]}`
+        `Configuration: ${BASES} sets of ${BASE} per row`
     ];
     writeHUD(messages, {x:~~cell.x,y:~~cell.y});
 }
@@ -37,12 +25,10 @@ function renderHUD(e){
 $(document).ready(function(){
     canvas.addEventListener('mousedown', function(e) {
         var mousePos = getMousePos(e);
-        var cell = {
-            x:(mousePos.x+XOFFSET)/(XSIZE*ZOOM),
-            y:(mousePos.y+YOFFSET)/(YSIZE*ZOOM)
-        }
-
-        markToggle(~~cell.x,~~cell.y)
+        // var cell = {
+        //     x:(mousePos.x+XOFFSET)/(XSIZE*ZOOM),
+        //     y:(mousePos.y+YOFFSET)/(YSIZE*ZOOM)
+        // }
     })
     canvas.addEventListener('mousemove', function(e) {
         renderHUD(e)
@@ -54,6 +40,25 @@ $(document).ready(function(){
         // Get primes from the server
         if(key == 'g') {
             reload()
+        }
+        // Control BASE and BASES settings of viewer
+        if(key == '{') { // Base down
+            if(BASE==1)return
+            BASE=PRIMES[PRIMES.indexOf(BASE)-1]
+            redraw()
+        }
+        if(key == '}') { // Base up
+            if(BASE>600)return
+            BASE=PRIMES[PRIMES.indexOf(BASE)+1]
+            redraw()
+        }
+        if(key == '[') { // Bases down
+            if(BASES==1)return
+            redraw(BASES--)
+        }
+        if(key == ']') { // Bases up
+            if(BASES>60)return
+            redraw(BASES++)
         }
         // Diff one step
         if(key == 'q') {
@@ -77,24 +82,6 @@ $(document).ready(function(){
             clear()
             redraw()
         }
-        // Log the runs
-        if(key == 'r'){
-            const mapp = new Array(BIN_LENGTH).fill([]).map((v,y)=>{
-                return PRIMES
-                    .map((p,i)=>bin(i,y))
-                    .reduce((t,bit)=>{
-                        if(bit==t.state)t.rle[t.rle.length-1]=(t.rle[t.rle.length-1]||0) +1;
-                        else {
-                            t.rle.push(1);
-                            t.state = bit;
-                        }
-                        return t
-                    },{rle:[],state:0})
-            })
-            .map(obj=>obj.rle)
-            console.dir(mapp)
-        }
-        
         if(key=='ArrowUp' || key=='w'){ YOFFSET-=10; redraw(); }
         if(key=='ArrowDown' || key=='s'){ YOFFSET+=10; redraw(); }
         if(key=='ArrowLeft' || key=='a'){ XOFFSET-=10; redraw(); }
@@ -132,8 +119,6 @@ $(document).ready(function(){
 function reload(cb){
     $.getJSON( "/primes.json", data => {
         PRIMES = data.slice(0,10000).filter(p=>p)
-        XSIZE = canvas.width/PRIMES.length
-        YSIZE = canvas.height/BIN_LENGTH
         redraw()
         if(cb)cb();
     })
@@ -141,97 +126,59 @@ function reload(cb){
 
 
 function redraw(){
-    const b = bin()
-    for(let x=0; x<b.length; x++){
-        for(let y=0; y<b[x].length; y++){
-            sq(
-                xpos=(XSIZE*x*ZOOM-XOFFSET),
-                ypos=(YSIZE*y*ZOOM-YOFFSET),
-                XSIZE*ZOOM, 
-                YSIZE*ZOOM,
-                color[b[x][y]+';'+mark(x,y)]||color.err
-            )
-        }
+    clear()
+
+    const MAX = PRIMES[PRIMES.length - 1] + 1
+    const COL_WIDTH = ( CELL * BASE + SEPARATOR)*ZOOM
+    const COL_HEIGHT = (SEPARATOR + CELL) * ~~( MAX / ( BASE * BASES ))*ZOOM
+
+    const XCENTER = ( -COL_WIDTH * BASES + canvas.width ) / 2
+    // Clear the plate
+    sq(
+        XCENTER + -10*ZOOM-XOFFSET,
+        -10*ZOOM-YOFFSET,
+        20+((BASE * BASES * CELL + BASES * SEPARATOR)* ZOOM), 
+        20+COL_HEIGHT,
+        '#888888'
+    )
+
+    // Draw the columns
+    for(let c=0;c<BASES;c++) sq(
+        XCENTER + c*COL_WIDTH-XOFFSET,
+        0-YOFFSET,
+        COL_WIDTH, 
+        COL_HEIGHT,
+        '#888888'
+    )
+    
+    // Draw the rows
+    for(i in PRIMES){
+        const p = PRIMES[i]-1
+        // y as an index
+        y_literal = ~~(p / (BASE * BASES))
+        // y as a position
+        y = (SEPARATOR + CELL) * y_literal
+        // as above
+        x_literal = p % (BASE * BASES)
+        x = CELL * x_literal + SEPARATOR * ~~(x_literal/BASE)
+
+        sq(
+            xpos=(x*ZOOM-XOFFSET) + XCENTER,
+            ypos=(y*ZOOM-YOFFSET),
+            CELL*ZOOM, 
+            CELL*ZOOM,
+            
+        )
     }
     renderHUD()
 }
 
 
 function writeHUD(messages,xy) {
-    c.clearRect(0, 0, 350, 80);
+    c.clearRect(0, 0, 300, 60);
     c.font = '11pt Calibri';
     c.fillStyle = 'black';
     messages.map((msg,i)=>{
         c.fillText(msg, 10, 15+15*i);
     })
-
-    // Render a magnification
-    if(xy){
-        cursor = {x:-5, X:5, y:-3, Y:3}
-        let cursorSpace = {x:200, y:5, w:200, h:80}
-
-        sq(
-            cursorSpace.x-5,
-            cursorSpace.y-5,
-            cursorSpace.w+10,
-            cursorSpace.h+10,
-            '#BBBBBB'
-        )
-
-        let cursorCell = {
-            w:1+cursor.X-cursor.x,
-            h:1+cursor.Y-cursor.y
-        }
-        cursorCell.x = cursorSpace.w/cursorCell.w
-        cursorCell.y = cursorSpace.h/cursorCell.h
-
-        for(let x=0; x<cursorCell.w; x++) {
-            for(let y=0; y<cursorCell.h; y++) {
-                coord = {
-                    x:cursor.x+x,
-                    y:cursor.y+y,
-                }
-                sq(
-                    cursorSpace.x+cursorCell.x*x,
-                    cursorSpace.y+cursorCell.y*y,
-                    cursorCell.x,
-                    cursorCell.y,
-                    color[bin(coord.x+xy.x,coord.y+xy.y)+';'+mark(coord.x+xy.x,coord.y+xy.y)]||'#FF0000'
-                )
-            }
-        }
-        // Render a midpoint
-        sq(
-            cursorSpace.x+cursorCell.x*cursorCell.w/2,
-            cursorSpace.y+cursorCell.y*cursorCell.h/2,
-            2,
-            2,
-            '#22EE22'
-        )
-    }
-}
-function bin(x,y){
-    const primeToBin = (p='?')=>('0'.repeat(BIN_LENGTH)+p.toString(2)).slice(-BIN_LENGTH)
-
-    if(!isNaN(x)) {
-        const out = primeToBin(PRIMES[x])
-        
-        if(!isNaN(y)) {
-            if(y<0) return '?'
-            return out[y]
-        }
-        if(x<0)return new Array(BIN_LENGTH).fill('?')
-        return out
-    }
-    const b = PRIMES.map(primeToBin)
-    return b
-}
-
-function markToggle(x,y){
-    markers[x+','+y]=!(markers[x+','+y])
-    redraw()
-}
-function mark(x,y){
-    if(x<0 || y<0) return 0
-    return markers[x+','+y] || 0
 }
